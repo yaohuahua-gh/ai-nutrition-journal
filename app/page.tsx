@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Flame, Heart, ImagePlus, Loader2, Plus, RefreshCcw, ScanBarcode, Sparkles, Target } from 'lucide-react'
+import { BookOpen, Camera, Check, Database, Flame, Heart, Images, Loader2, Plus, RefreshCcw, ScanBarcode, Search, Sparkles, Target } from 'lucide-react'
 import { BottomNav } from '@/components/BottomNav'
 import { IngredientEditor } from '@/components/IngredientEditor'
 import { MetricPill } from '@/components/MetricPill'
 import { PwaBootstrap } from '@/components/PwaBootstrap'
 import { defaultTargets, summarizeDay, summarizeIngredients } from '@/lib/nutrition'
-import type { AnalyzedIngredient, FavoriteFood, MealEntry, MealType } from '@/types/nutrition'
+import type { AnalyzedIngredient, DailyTargets, FavoriteFood, MealEntry, MealType, NutritionMatch } from '@/types/nutrition'
 
 type Tab = 'capture' | 'today' | 'favorites' | 'settings'
 
@@ -18,6 +18,25 @@ const mealLabels: Record<MealType, string> = {
   snack: '加餐'
 }
 
+const targetFields: { key: keyof DailyTargets; label: string; unit: string; tone: 'coral' | 'leaf' | 'yolk' | 'plain' }[] = [
+  { key: 'caloriesKcal', label: '热量', unit: 'kcal', tone: 'coral' },
+  { key: 'proteinG', label: '蛋白质', unit: 'g', tone: 'leaf' },
+  { key: 'fatG', label: '脂肪', unit: 'g', tone: 'yolk' },
+  { key: 'carbsG', label: '碳水', unit: 'g', tone: 'plain' }
+]
+
+function todayLabel() {
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long'
+  }).format(new Date())
+}
+
+function emptyMacro() {
+  return { caloriesKcal: 0, proteinG: 0, fatG: 0, carbsG: 0, fiberG: 0 }
+}
+
 export default function HomePage() {
   const [tab, setTab] = useState<Tab>('capture')
   const [mealType, setMealType] = useState<MealType>('lunch')
@@ -25,17 +44,44 @@ export default function HomePage() {
   const [ingredients, setIngredients] = useState<AnalyzedIngredient[]>([])
   const [entries, setEntries] = useState<MealEntry[]>([])
   const [favorites, setFavorites] = useState<FavoriteFood[]>([])
+  const [targets, setTargets] = useState<DailyTargets>(defaultTargets)
   const [report, setReport] = useState('')
   const [barcode, setBarcode] = useState('')
+  const [libraryQuery, setLibraryQuery] = useState('')
+  const [libraryWeight, setLibraryWeight] = useState(100)
+  const [libraryResult, setLibraryResult] = useState<NutritionMatch | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
 
   const currentTotal = useMemo(() => summarizeIngredients(ingredients), [ingredients])
-  const today = useMemo(() => summarizeDay(entries), [entries])
+  const today = useMemo(() => summarizeDay(entries, targets), [entries, targets])
+  const mealsToday = useMemo(
+    () =>
+      (Object.keys(mealLabels) as MealType[]).map((type) => {
+        const mealEntries = entries.filter((entry) => entry.mealType === type)
+        const mealIngredients = mealEntries.flatMap((entry) => entry.ingredients)
+        return {
+          type,
+          label: mealLabels[type],
+          entries: mealEntries,
+          total: mealIngredients.length ? summarizeIngredients(mealIngredients) : emptyMacro()
+        }
+      }),
+    [entries]
+  )
 
   useEffect(() => {
+    const savedTargets = window.localStorage.getItem('nutrition-targets')
+    if (savedTargets) {
+      setTargets({ ...defaultTargets, ...JSON.parse(savedTargets) })
+    }
     void refreshEntries()
     void refreshFavorites()
   }, [])
+
+  function updateTargets(next: DailyTargets) {
+    setTargets(next)
+    window.localStorage.setItem('nutrition-targets', JSON.stringify(next))
+  }
 
   async function refreshEntries() {
     const response = await fetch('/api/entries')
@@ -138,11 +184,45 @@ export default function HomePage() {
     const response = await fetch('/api/daily-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ entries })
+      body: JSON.stringify({ entries, targets })
     })
     const data = await response.json()
     setReport(data.narrative || '')
     setBusy(null)
+  }
+
+  async function searchNutritionLibrary() {
+    if (!libraryQuery.trim()) return
+    setBusy('library')
+    const response = await fetch('/api/match-nutrition', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: libraryQuery.trim(), weightG: libraryWeight })
+    })
+    const data = await response.json()
+    setLibraryResult(data.match || null)
+    setBusy(null)
+  }
+
+  function addLibraryResultToCurrent() {
+    if (!libraryResult) return
+    setIngredients((current) => [
+      ...current,
+      {
+        id: crypto.randomUUID(),
+        name: libraryResult.displayName,
+        weightG: libraryWeight,
+        confidence: 1,
+        source: libraryResult.source === 'mock' ? 'user' : libraryResult.source,
+        caloriesKcal: libraryResult.caloriesKcal,
+        proteinG: libraryResult.proteinG,
+        fatG: libraryResult.fatG,
+        carbsG: libraryResult.carbsG,
+        fiberG: libraryResult.fiberG,
+        standard: libraryResult
+      }
+    ])
+    setTab('capture')
   }
 
   function addFavoriteToCurrent(favorite: FavoriteFood) {
@@ -150,17 +230,40 @@ export default function HomePage() {
     setTab('capture')
   }
 
+  function handleFileChange(file?: File) {
+    if (file) void analyzePhoto(file)
+  }
+
   return (
     <main className="safe-bottom min-h-screen bg-cloud">
       <PwaBootstrap />
       <div className="mx-auto max-w-md px-4 pt-5">
-        <header className="flex items-center justify-between">
-          <div>
-            <div className="text-xs font-semibold text-leaf">AI 初筛 + 标准库校准</div>
-            <h1 className="mt-1 text-2xl font-black tracking-normal text-ink">营养记录</h1>
+        <header
+          className="relative -mx-4 -mt-5 min-h-[270px] overflow-hidden bg-cover bg-center px-4 pb-5 pt-7 text-white"
+          style={{ backgroundImage: "linear-gradient(180deg, rgba(23,33,27,0.12) 0%, rgba(23,33,27,0.46) 62%, rgba(23,33,27,0.76) 100%), url('/images/wellness-hero.png')" }}
+        >
+          <div className="flex items-center justify-between">
+            <div className="rounded-full bg-white/18 px-3 py-1 text-xs font-bold backdrop-blur">AI 初筛 + 标准库校准</div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/18 backdrop-blur">
+              <Flame size={21} aria-hidden="true" />
+            </div>
           </div>
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-ink text-white">
-            <Flame size={21} aria-hidden="true" />
+          <div className="absolute inset-x-4 bottom-5">
+            <h1 className="max-w-[290px] text-4xl font-black leading-tight tracking-normal">化化姐的AI营养记录</h1>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <div className="rounded-lg bg-white/16 px-3 py-2 backdrop-blur">
+                <div className="text-[11px] text-white/75">今日热量</div>
+                <div className="mt-0.5 text-sm font-black">{today.caloriesKcal} kcal</div>
+              </div>
+              <div className="rounded-lg bg-white/16 px-3 py-2 backdrop-blur">
+                <div className="text-[11px] text-white/75">蛋白质</div>
+                <div className="mt-0.5 text-sm font-black">{today.proteinG} g</div>
+              </div>
+              <div className="rounded-lg bg-white/16 px-3 py-2 backdrop-blur">
+                <div className="text-[11px] text-white/75">完成度</div>
+                <div className="mt-0.5 text-sm font-black">{today.score}</div>
+              </div>
+            </div>
           </div>
         </header>
 
@@ -178,28 +281,31 @@ export default function HomePage() {
               ))}
             </div>
 
-            <label className="flex aspect-[4/3] w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed border-leaf/45 bg-white text-center shadow-soft">
+            <div className="flex aspect-[4/3] w-full flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed border-leaf/45 bg-white text-center shadow-soft">
               {photoPreview ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={photoPreview} alt="已选择的食物照片" className="h-full w-full object-cover" />
               ) : (
                 <>
-                  <ImagePlus className="text-leaf" size={34} aria-hidden="true" />
-                  <div className="mt-3 text-base font-black">拍照或上传食物</div>
-                  <div className="mt-1 text-xs text-ink/50">手机会直接打开相机或相册</div>
+                  <Images className="text-leaf" size={34} aria-hidden="true" />
+                  <div className="mt-3 text-base font-black">选择食物照片</div>
+                  <div className="mt-1 text-xs text-ink/50">可以现场拍照，也可以从相册选</div>
                 </>
               )}
-              <input
-                className="sr-only"
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={(event) => {
-                  const file = event.target.files?.[0]
-                  if (file) void analyzePhoto(file)
-                }}
-              />
-            </label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex h-12 cursor-pointer items-center justify-center gap-2 rounded-lg bg-leaf px-3 text-sm font-black text-white">
+                <Camera size={18} aria-hidden="true" />
+                拍照
+                <input className="sr-only" type="file" accept="image/*" capture="environment" onChange={(event) => handleFileChange(event.target.files?.[0])} />
+              </label>
+              <label className="flex h-12 cursor-pointer items-center justify-center gap-2 rounded-lg bg-white px-3 text-sm font-black text-ink shadow-soft">
+                <Images size={18} aria-hidden="true" />
+                从相册选
+                <input className="sr-only" type="file" accept="image/*" onChange={(event) => handleFileChange(event.target.files?.[0])} />
+              </label>
+            </div>
 
             <div className="grid grid-cols-[1fr_auto] gap-2">
               <div className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 shadow-soft">
@@ -259,6 +365,7 @@ export default function HomePage() {
             <div className="rounded-lg bg-ink p-4 text-white shadow-soft">
               <div className="flex items-center justify-between">
                 <div>
+                  <div className="text-xs text-white/65">{todayLabel()}</div>
                   <div className="text-xs text-white/65">今日完成度</div>
                   <div className="mt-1 text-4xl font-black">{today.score}</div>
                 </div>
@@ -277,7 +384,72 @@ export default function HomePage() {
               生成今天日报
             </button>
 
-            {report && <pre className="whitespace-pre-wrap rounded-lg bg-white p-4 text-sm leading-6 text-ink shadow-soft">{report}</pre>}
+            {report && (
+              <section className="rounded-lg bg-white p-4 shadow-soft">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold text-leaf">今天日报</div>
+                    <h2 className="mt-1 text-xl font-black">{todayLabel()}</h2>
+                  </div>
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-mint text-leaf">
+                    <BookOpen size={18} aria-hidden="true" />
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  {mealsToday.map((meal) => (
+                    <div key={meal.type} className="rounded-lg bg-cloud p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-black">{meal.label}</div>
+                        <div className="text-sm font-black text-coral">{meal.total.caloriesKcal} kcal</div>
+                      </div>
+                      <div className="mt-2 grid grid-cols-4 gap-1 text-center text-[11px]">
+                        <div className="rounded-lg bg-white px-1 py-2">
+                          <div className="font-black">{meal.total.proteinG}</div>
+                          <div className="text-ink/45">蛋白</div>
+                        </div>
+                        <div className="rounded-lg bg-white px-1 py-2">
+                          <div className="font-black">{meal.total.fatG}</div>
+                          <div className="text-ink/45">脂肪</div>
+                        </div>
+                        <div className="rounded-lg bg-white px-1 py-2">
+                          <div className="font-black">{meal.total.carbsG}</div>
+                          <div className="text-ink/45">碳水</div>
+                        </div>
+                        <div className="rounded-lg bg-white px-1 py-2">
+                          <div className="font-black">{meal.total.fiberG}</div>
+                          <div className="text-ink/45">纤维</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3 rounded-lg bg-ink p-3 text-white">
+                  <div className="text-xs text-white/65">全天加总</div>
+                  <div className="mt-2 grid grid-cols-4 gap-2 text-center text-[11px]">
+                    <div>
+                      <div className="text-base font-black">{today.caloriesKcal}</div>
+                      <div className="text-white/55">kcal</div>
+                    </div>
+                    <div>
+                      <div className="text-base font-black">{today.proteinG}</div>
+                      <div className="text-white/55">蛋白</div>
+                    </div>
+                    <div>
+                      <div className="text-base font-black">{today.fatG}</div>
+                      <div className="text-white/55">脂肪</div>
+                    </div>
+                    <div>
+                      <div className="text-base font-black">{today.carbsG}</div>
+                      <div className="text-white/55">碳水</div>
+                    </div>
+                  </div>
+                </div>
+
+                <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-mint p-3 text-sm leading-6 text-leaf">{report}</pre>
+              </section>
+            )}
 
             <div className="space-y-3">
               {entries.map((entry) => {
@@ -310,6 +482,72 @@ export default function HomePage() {
 
         {tab === 'favorites' && (
           <section className="mt-5 space-y-3">
+            <section className="rounded-lg bg-white p-4 shadow-soft">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-mint text-leaf">
+                  <Database size={18} aria-hidden="true" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-base font-black">标准营养库</div>
+                  <div className="mt-0.5 text-xs text-ink/50">查询 USDA / Open Food Facts 对照数据</div>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-[1fr_86px_auto] gap-2">
+                <input
+                  className="min-w-0 rounded-lg bg-cloud px-3 py-3 text-sm font-semibold outline-none"
+                  value={libraryQuery}
+                  onChange={(event) => setLibraryQuery(event.target.value)}
+                  placeholder="鸡胸肉 / 酸奶 / 燕麦"
+                />
+                <div className="flex items-center gap-1 rounded-lg bg-cloud px-2 py-2">
+                  <input
+                    className="w-full min-w-0 bg-transparent text-sm font-black outline-none"
+                    inputMode="numeric"
+                    value={libraryWeight}
+                    onChange={(event) => setLibraryWeight(Number(event.target.value || 0))}
+                    aria-label="查询重量"
+                  />
+                  <span className="text-xs text-ink/45">g</span>
+                </div>
+                <button className="flex h-12 w-12 items-center justify-center rounded-lg bg-ink text-white" onClick={searchNutritionLibrary} aria-label="查询标准营养库">
+                  {busy === 'library' ? <Loader2 className="animate-spin" size={18} /> : <Search size={18} />}
+                </button>
+              </div>
+
+              {libraryResult && (
+                <div className="mt-3 rounded-lg bg-cloud p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-black">{libraryResult.displayName}</div>
+                      <div className="mt-1 text-[11px] text-ink/45">{libraryResult.source} · {libraryResult.servingBasis}</div>
+                    </div>
+                    <button className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-leaf text-white" onClick={addLibraryResultToCurrent} aria-label="加入当前记录">
+                      <Plus size={17} />
+                    </button>
+                  </div>
+                  <div className="mt-3 grid grid-cols-4 gap-1 text-center text-[11px]">
+                    <div className="rounded-lg bg-white px-1 py-2">
+                      <div className="font-black">{libraryResult.caloriesKcal}</div>
+                      <div className="text-ink/45">kcal</div>
+                    </div>
+                    <div className="rounded-lg bg-white px-1 py-2">
+                      <div className="font-black">{libraryResult.proteinG}</div>
+                      <div className="text-ink/45">蛋白</div>
+                    </div>
+                    <div className="rounded-lg bg-white px-1 py-2">
+                      <div className="font-black">{libraryResult.fatG}</div>
+                      <div className="text-ink/45">脂肪</div>
+                    </div>
+                    <div className="rounded-lg bg-white px-1 py-2">
+                      <div className="font-black">{libraryResult.carbsG}</div>
+                      <div className="text-ink/45">碳水</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+
             {favorites.map((favorite) => {
               const total = summarizeIngredients(favorite.ingredients)
               return (
@@ -330,15 +568,32 @@ export default function HomePage() {
         )}
 
         {tab === 'settings' && (
-          <section className="mt-5 rounded-lg bg-white p-4 shadow-soft">
-            <div className="text-base font-black">每日目标</div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <MetricPill label="热量" value={`${defaultTargets.caloriesKcal} kcal`} tone="coral" />
-              <MetricPill label="蛋白质" value={`${defaultTargets.proteinG} g`} tone="leaf" />
-              <MetricPill label="脂肪" value={`${defaultTargets.fatG} g`} tone="yolk" />
-              <MetricPill label="碳水" value={`${defaultTargets.carbsG} g`} />
+          <section className="mt-5 space-y-4">
+            <div className="rounded-lg bg-white p-4 shadow-soft">
+              <div className="text-base font-black">每日目标</div>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                {targetFields.map((field) => (
+                  <label key={field.key} className="rounded-lg bg-cloud p-3">
+                    <span className="text-xs font-semibold text-ink/55">{field.label}</span>
+                    <div className="mt-2 flex items-center gap-2 rounded-lg bg-white px-3 py-2">
+                      <input
+                        className="w-full min-w-0 bg-transparent text-lg font-black outline-none"
+                        inputMode="numeric"
+                        value={targets[field.key]}
+                        onChange={(event) => updateTargets({ ...targets, [field.key]: Number(event.target.value || 0) })}
+                      />
+                      <span className="shrink-0 text-xs text-ink/45">{field.unit}</span>
+                    </div>
+                  </label>
+                ))}
+              </div>
+              <button className="mt-4 w-full rounded-lg bg-ink px-4 py-3 text-sm font-black text-white" onClick={() => updateTargets(defaultTargets)}>
+                恢复默认目标
+              </button>
             </div>
-            <p className="mt-4 text-sm leading-6 text-ink/60">接入 Supabase Auth 后，这里可以改成个人目标、减脂速度、运动日系数和蛋白质下限。</p>
+            <div className="rounded-lg bg-mint p-3 text-sm leading-6 text-leaf">
+              修改后会保存在这台手机里，并立刻影响“今日完成度”和目标对比。以后接入登录后，可以同步到云端。
+            </div>
           </section>
         )}
       </div>
