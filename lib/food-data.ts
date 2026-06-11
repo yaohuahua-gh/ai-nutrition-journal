@@ -4,11 +4,15 @@ import { macroByWeight } from '@/lib/nutrition'
 type UsdaFood = {
   fdcId: number
   description: string
-  foodNutrients?: { nutrientName: string; value?: number }[]
+  foodNutrients?: { nutrientName: string; unitName?: string; value?: number }[]
 }
 
-function nutrient(food: UsdaFood, names: string[]) {
-  const item = food.foodNutrients?.find((entry) => names.some((name) => entry.nutrientName.toLowerCase().includes(name)))
+function nutrient(food: UsdaFood, names: string[], unitName?: string) {
+  const item = food.foodNutrients?.find((entry) => {
+    const nameMatches = names.some((name) => entry.nutrientName.toLowerCase().includes(name))
+    const unitMatches = unitName ? entry.unitName?.toLowerCase() === unitName.toLowerCase() : true
+    return nameMatches && unitMatches
+  })
   return item?.value || 0
 }
 
@@ -27,7 +31,7 @@ export async function searchUsdaFood(query: string, weightG: number): Promise<Nu
   if (!food) return undefined
 
   const per100g = {
-    caloriesKcal: nutrient(food, ['energy']),
+    caloriesKcal: nutrient(food, ['energy'], 'KCAL') || Math.round(nutrient(food, ['energy'], 'kJ') / 4.184),
     proteinG: nutrient(food, ['protein']),
     fatG: nutrient(food, ['total lipid', 'total fat']),
     carbsG: nutrient(food, ['carbohydrate']),

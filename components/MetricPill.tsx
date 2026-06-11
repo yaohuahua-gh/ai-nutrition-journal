@@ -13,9 +13,9 @@ const tones = {
 
 export function MetricPill({ label, value, tone = 'plain' }: MetricPillProps) {
   return (
-    <div className={`rounded-lg px-3 py-2 ${tones[tone]}`}>
+    <div className={`min-w-0 rounded-lg px-3 py-2 ${tones[tone]}`}>
       <div className="text-[11px] font-medium opacity-70">{label}</div>
-      <div className="mt-0.5 text-sm font-bold">{value}</div>
+      <div className="mt-0.5 truncate text-[13px] font-bold leading-tight">{value}</div>
     </div>
   )
 }

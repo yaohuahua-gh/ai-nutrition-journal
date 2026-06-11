@@ -3,13 +3,13 @@ import type { ReactNode } from 'react'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: '化化姐的AI营养记录',
+  title: 'Coco AI营养记录',
   description: 'AI 初筛、权威库校准、自己确认、自动复盘的移动端营养记录 App',
   manifest: '/manifest.webmanifest',
-  applicationName: '化化姐的AI营养记录',
+  applicationName: 'Coco AI营养记录',
   appleWebApp: {
     capable: true,
-    title: '化化姐营养记录',
+    title: 'Coco AI营养记录',
     statusBarStyle: 'default'
   },
   icons: {

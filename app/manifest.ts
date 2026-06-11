@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: '化化姐的AI营养记录',
-    short_name: '化化姐营养',
+    name: 'Coco AI营养记录',
+    short_name: 'Coco营养',
     description: '拍照识别、标准营养库校准、确认后记录、每日自动复盘。',
     start_url: '/',
     scope: '/',

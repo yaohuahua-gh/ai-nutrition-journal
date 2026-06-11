@@ -34,23 +34,35 @@ export async function POST(request: Request) {
   const dataUrl = `data:${file.type || 'image/jpeg'};base64,${bytes.toString('base64')}`
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    response_format: { type: 'json_object' },
-    messages: [
+  let completion
+  try {
+    completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content: 'You estimate food photo nutrition. Return strict JSON with ingredients array. Values are per visible portion, in grams and kcal. Be conservative and include confidence 0-1.'
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Identify each visible ingredient or dish component. Return name, weightG, caloriesKcal, proteinG, fatG, carbsG, fiberG, confidence.' },
+            { type: 'image_url', image_url: { url: dataUrl } }
+          ]
+        }
+      ]
+    })
+  } catch (error) {
+    return NextResponse.json(
       {
-        role: 'system',
-        content: 'You estimate food photo nutrition. Return strict JSON with ingredients array. Values are per visible portion, in grams and kcal. Be conservative and include confidence 0-1.'
+        ingredients: [],
+        mode: 'error',
+        error: error instanceof Error ? error.message : 'OpenAI photo analysis failed.'
       },
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'Identify each visible ingredient or dish component. Return name, weightG, caloriesKcal, proteinG, fatG, carbsG, fiberG, confidence.' },
-          { type: 'image_url', image_url: { url: dataUrl } }
-        ]
-      }
-    ]
-  })
+      { status: 500 }
+    )
+  }
 
   const raw = completion.choices[0]?.message.content || '{"ingredients":[]}'
   const parsed = responseSchema.parse(JSON.parse(raw))
