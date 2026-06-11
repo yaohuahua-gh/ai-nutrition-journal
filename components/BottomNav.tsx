@@ -1,9 +1,9 @@
 import { Camera, Heart, Settings, Utensils } from 'lucide-react'
-import type { ComponentType } from 'react'
+import type { LucideIcon } from 'lucide-react'
 
 type Tab = 'capture' | 'today' | 'favorites' | 'settings'
 
-const items: { id: Tab; label: string; icon: ComponentType<{ size?: number }> }[] = [
+const items: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'capture', label: '记录', icon: Camera },
   { id: 'today', label: '今日', icon: Utensils },
   { id: 'favorites', label: '常吃', icon: Heart },
