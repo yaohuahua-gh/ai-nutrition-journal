@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  background: #f7faf7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f7faf7;
+  color: #17211b;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.safe-bottom {
+  padding-bottom: calc(92px + env(safe-area-inset-bottom));
+}
