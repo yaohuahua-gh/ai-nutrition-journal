@@ -31,39 +31,15 @@ USDA_API_KEY=
 DEMO_USER_ID=
 ```
 
-AI 图片识别可以三选一。
-
-### 使用智谱 GLM-4V-Flash
+AI 图片识别使用智谱 GLM-4V-Flash。
 
 ```bash
-AI_PROVIDER=zhipu
 ZHIPU_API_KEY=你的智谱开放平台 API Key
 ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4
 ZHIPU_MODEL=glm-4v-flash
 ```
 
 这是当前比较适合国内访问和低成本试验的方案。
-
-### 使用豆包
-
-```bash
-AI_PROVIDER=doubao
-DOUBAO_API_KEY=你的火山方舟 API Key
-DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
-DOUBAO_MODEL=你的豆包视觉模型或 endpoint 名称
-```
-
-`DOUBAO_MODEL` 必须填火山方舟控制台里可用于图片理解的模型或 endpoint。不同账号开通的名称可能不同，所以不要随便填。
-
-### 使用 OpenAI
-
-```bash
-AI_PROVIDER=openai
-OPENAI_API_KEY=你的 OpenAI API Key
-OPENAI_VISION_MODEL=gpt-4o-mini
-```
-
-如果不填 `AI_PROVIDER`，系统会优先尝试智谱，再尝试豆包，最后尝试 OpenAI。都没配时，会返回演示数据。
 
 ## 手机安装
 
@@ -91,7 +67,7 @@ OPENAI_VISION_MODEL=gpt-4o-mini
 
 ## API Routes
 
-- `POST /api/analyze-photo`：豆包或 OpenAI 识别照片并匹配标准库
+- `POST /api/analyze-photo`：智谱 GLM-4V-Flash 识别照片并匹配标准库
 - `POST /api/match-nutrition`：按食材名称和重量查询 USDA / Open Food Facts
 - `POST /api/barcode`：按条形码查询 Open Food Facts
 - `GET /api/entries`：读取今日记录

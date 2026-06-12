@@ -418,19 +418,19 @@ export default function HomePage() {
 
             {analyzeMode === 'mock' && (
               <div className="rounded-lg bg-[#fff4cc] p-3 text-sm leading-6 text-[#8a6100]">
-                现在返回的是演示数据，所以可能总是鸡胸肉、米饭、西兰花。请确认 Vercel 里 `OPENAI_API_KEY` 已保存到 Production，并且保存后重新部署。
+                现在返回的是演示数据，所以可能总是鸡胸肉、米饭、西兰花。请确认 Vercel 里 `ZHIPU_API_KEY` 已保存到 Production，并且保存后重新部署。
               </div>
             )}
 
             {analyzeMode === 'live' && (
               <div className="rounded-lg bg-mint p-3 text-sm font-semibold text-leaf">
-                已使用 {analyzeProvider === 'zhipu' ? '智谱 GLM-4V-Flash' : analyzeProvider === 'doubao' ? '豆包' : 'OpenAI'} 真实识别。
+                已使用智谱 GLM-4V-Flash 真实识别。
               </div>
             )}
 
             {analyzeMode === 'error' && (
               <div className="rounded-lg bg-[#ffe9e4] p-3 text-sm leading-6 text-coral">
-                真实识别失败。通常是 OpenAI Key 没生效、Key 填错、余额/额度不足，或保存环境变量后还没重新部署。{analyzeMessage ? `错误信息：${analyzeMessage}` : ''}
+                真实识别失败。通常是智谱 API Key 没生效、Key 填错、余额/额度不足，或保存环境变量后还没重新部署。{analyzeMessage ? `错误信息：${analyzeMessage}` : ''}
               </div>
             )}
 
