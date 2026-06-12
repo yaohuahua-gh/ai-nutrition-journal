@@ -89,6 +89,7 @@ export default function HomePage() {
   const [libraryMessage, setLibraryMessage] = useState('')
   const [analyzeMode, setAnalyzeMode] = useState<AnalyzeMode>('idle')
   const [analyzeMessage, setAnalyzeMessage] = useState('')
+  const [analyzeProvider, setAnalyzeProvider] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
 
   const currentTotal = useMemo(() => summarizeIngredients(ingredients), [ingredients])
@@ -109,14 +110,19 @@ export default function HomePage() {
   )
 
   useEffect(() => {
-    const savedTargets = window.localStorage.getItem('nutrition-targets')
-    const savedReports = window.localStorage.getItem('nutrition-report-history')
-    if (savedTargets) {
-      const parsed = { ...defaultTargets, ...JSON.parse(savedTargets) }
-      setTargets(parsed)
-      setTargetDraft(parsed)
+    try {
+      const savedTargets = window.localStorage.getItem('nutrition-targets')
+      const savedReports = window.localStorage.getItem('nutrition-report-history')
+      if (savedTargets) {
+        const parsed = { ...defaultTargets, ...JSON.parse(savedTargets) }
+        setTargets(parsed)
+        setTargetDraft(parsed)
+      }
+      if (savedReports) setReportHistory(JSON.parse(savedReports))
+    } catch {
+      window.localStorage.removeItem('nutrition-targets')
+      window.localStorage.removeItem('nutrition-report-history')
     }
-    if (savedReports) setReportHistory(JSON.parse(savedReports))
     void refreshEntries()
     void refreshFavorites()
   }, [])
@@ -128,6 +134,7 @@ export default function HomePage() {
     setIngredients([])
     setAnalyzeMode('idle')
     setAnalyzeMessage('')
+    setAnalyzeProvider('')
   }
 
   async function analyzeSelectedPhoto() {
@@ -141,6 +148,7 @@ export default function HomePage() {
     setIngredients(data.ingredients || [])
     setAnalyzeMode(data.mode === 'live' ? 'live' : data.mode === 'mock' ? 'mock' : 'error')
     setAnalyzeMessage(data.error || data.note || '')
+    setAnalyzeProvider(data.provider || '')
     setBusy(null)
   }
 
@@ -305,7 +313,7 @@ export default function HomePage() {
       <PwaBootstrap />
       <div className="mx-auto max-w-md px-4 pt-5">
         <header
-          className="relative -mx-4 -mt-5 min-h-[250px] overflow-hidden bg-cover bg-center px-4 pb-5 pt-7 text-white"
+          className="relative -mx-4 -mt-5 min-h-[205px] overflow-hidden bg-cover bg-center px-4 pb-4 pt-6 text-white"
           style={{ backgroundImage: "linear-gradient(180deg, rgba(23,33,27,0.10) 0%, rgba(23,33,27,0.45) 58%, rgba(23,33,27,0.78) 100%), url('/images/wellness-hero.png')" }}
         >
           <div className="flex items-center justify-between">
@@ -314,9 +322,9 @@ export default function HomePage() {
               <Flame size={21} aria-hidden="true" />
             </div>
           </div>
-          <div className="absolute inset-x-4 bottom-5">
-            <h1 className="whitespace-nowrap text-[30px] font-black leading-none tracking-normal">Coco AI营养记录</h1>
-            <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="absolute inset-x-4 bottom-4">
+            <h1 className="whitespace-nowrap text-[28px] font-black leading-none tracking-normal">Coco AI营养记录</h1>
+            <div className="mt-3 grid grid-cols-3 gap-2">
               <div className="rounded-lg bg-white/16 px-3 py-2 backdrop-blur">
                 <div className="text-[11px] text-white/75">今日热量</div>
                 <div className="mt-0.5 text-sm font-black">{kcal(today.caloriesKcal)} kcal</div>
@@ -414,7 +422,11 @@ export default function HomePage() {
               </div>
             )}
 
-            {analyzeMode === 'live' && <div className="rounded-lg bg-mint p-3 text-sm font-semibold text-leaf">已使用 OpenAI 真实识别。</div>}
+            {analyzeMode === 'live' && (
+              <div className="rounded-lg bg-mint p-3 text-sm font-semibold text-leaf">
+                已使用 {analyzeProvider === 'zhipu' ? '智谱 GLM-4V-Flash' : analyzeProvider === 'doubao' ? '豆包' : 'OpenAI'} 真实识别。
+              </div>
+            )}
 
             {analyzeMode === 'error' && (
               <div className="rounded-lg bg-[#ffe9e4] p-3 text-sm leading-6 text-coral">

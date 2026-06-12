@@ -1,7 +1,8 @@
-import OpenAI from 'openai'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { getVisionProvider, missingVisionConfigMessage } from '@/lib/ai-vision'
 import { searchOpenFoodFacts, searchUsdaFood } from '@/lib/food-data'
+import { foodSearchCandidates } from '@/lib/food-name'
 import { mockAnalyze, mockMatchNutrition } from '@/lib/mock-data'
 import { mergeWithStandard, roundNutrition } from '@/lib/nutrition'
 import type { IngredientEstimate } from '@/types/nutrition'
@@ -26,18 +27,18 @@ export async function POST(request: Request) {
   const file = form.get('photo')
   if (!(file instanceof File)) return NextResponse.json({ ingredients: mockAnalyze(), mode: 'mock' })
 
-  if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json({ ingredients: mockAnalyze(), mode: 'mock', note: 'OPENAI_API_KEY is not configured.' })
+  const provider = getVisionProvider()
+  if (!provider) {
+    return NextResponse.json({ ingredients: mockAnalyze(), mode: 'mock', note: missingVisionConfigMessage() })
   }
 
   const bytes = Buffer.from(await file.arrayBuffer())
   const dataUrl = `data:${file.type || 'image/jpeg'};base64,${bytes.toString('base64')}`
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
   let completion
   try {
-    completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    completion = await provider.client.chat.completions.create({
+      model: provider.model,
       response_format: { type: 'json_object' },
       messages: [
         {
@@ -58,7 +59,8 @@ export async function POST(request: Request) {
       {
         ingredients: [],
         mode: 'error',
-        error: error instanceof Error ? error.message : 'OpenAI photo analysis failed.'
+        provider: provider.name,
+        error: error instanceof Error ? error.message : `${provider.name} photo analysis failed.`
       },
       { status: 500 }
     )
@@ -73,10 +75,15 @@ export async function POST(request: Request) {
         source: 'ai',
         ...roundNutrition(item)
       }
-      const standard = (await searchUsdaFood(ai.name, ai.weightG)) || (await searchOpenFoodFacts(ai.name, ai.weightG)) || mockMatchNutrition(ai.name, ai.weightG)
+      let standard
+      for (const query of foodSearchCandidates(ai.name)) {
+        standard = (await searchUsdaFood(query, ai.weightG)) || (await searchOpenFoodFacts(query, ai.weightG))
+        if (standard) break
+      }
+      standard = standard || mockMatchNutrition(ai.name, ai.weightG)
       return mergeWithStandard(ai, standard)
     })
   )
 
-  return NextResponse.json({ ingredients, mode: 'live' })
+  return NextResponse.json({ ingredients, mode: 'live', provider: provider.name })
 }

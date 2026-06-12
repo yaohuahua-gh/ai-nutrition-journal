@@ -1,20 +1,8 @@
-# AI Nutrition Journal
+# Coco AI营养记录
 
-移动端优先的营养记录 Web App 原型：拍照上传食物，OpenAI Vision 做初筛，USDA FoodData Central / Open Food Facts 做标准数据校准，用户确认后写入每日饮食记录，并生成日报。
+移动端优先的营养记录 PWA：拍照识别食物，匹配 USDA / Open Food Facts 标准营养数据，用户确认后保存到当天记录，并生成每日复盘。
 
-## 功能
-
-- 手机拍照或上传食物照片
-- AI 输出食材名称、重量、热量、蛋白质、脂肪、碳水、纤维和置信度
-- 每个食材都可手动修改
-- 显示 AI 估算 vs 标准数据库差异
-- 保存到当天饮食记录
-- 今日总热量、三大营养素、每餐明细和目标完成度
-- 每日饮食复盘和明天建议
-- 常吃组合保存与一键添加
-- 包装食品条形码查询 Open Food Facts
-
-## 运行
+## 本地运行
 
 ```bash
 npm install
@@ -23,41 +11,66 @@ npm run dev
 
 打开 `http://localhost:3000`。
 
-没有配置密钥时，接口会自动返回演示数据，方便先验证产品流程。
-
-## 手机上使用
-
-开发测试时，电脑和手机连同一个 Wi-Fi，然后在电脑上运行：
+开发测试手机访问：
 
 ```bash
 npm run dev -- --hostname 0.0.0.0
 ```
 
-手机打开电脑的局域网地址，例如 `http://192.168.1.23:3000`。
+手机和电脑连同一个 Wi-Fi 后，用手机打开电脑局域网地址，例如 `http://192.168.1.23:3000`。
 
-想要随时使用，需要部署到一个公开的 HTTPS 地址。GitHub 不是必须的，但它是连接 Vercel、Netlify、Cloudflare Pages 这类部署平台最方便的方式。部署后，用手机浏览器打开网址：
+## Vercel 环境变量
 
-- iPhone：Safari 分享按钮 → 添加到主屏幕
-- Android：Chrome 菜单 → 添加到主屏幕 / 安装应用
-
-本项目已经包含 PWA 配置：
-
-- `app/manifest.ts`：应用名称、图标、启动方式
-- `public/sw.js`：基础离线缓存
-- `public/icons/`：主屏幕图标
-
-## 环境变量
-
-复制 `.env.example` 为 `.env.local`：
+基础配置：
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-OPENAI_API_KEY=
 USDA_API_KEY=
 DEMO_USER_ID=
 ```
+
+AI 图片识别可以三选一。
+
+### 使用智谱 GLM-4V-Flash
+
+```bash
+AI_PROVIDER=zhipu
+ZHIPU_API_KEY=你的智谱开放平台 API Key
+ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+ZHIPU_MODEL=glm-4v-flash
+```
+
+这是当前比较适合国内访问和低成本试验的方案。
+
+### 使用豆包
+
+```bash
+AI_PROVIDER=doubao
+DOUBAO_API_KEY=你的火山方舟 API Key
+DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+DOUBAO_MODEL=你的豆包视觉模型或 endpoint 名称
+```
+
+`DOUBAO_MODEL` 必须填火山方舟控制台里可用于图片理解的模型或 endpoint。不同账号开通的名称可能不同，所以不要随便填。
+
+### 使用 OpenAI
+
+```bash
+AI_PROVIDER=openai
+OPENAI_API_KEY=你的 OpenAI API Key
+OPENAI_VISION_MODEL=gpt-4o-mini
+```
+
+如果不填 `AI_PROVIDER`，系统会优先尝试智谱，再尝试豆包，最后尝试 OpenAI。都没配时，会返回演示数据。
+
+## 手机安装
+
+部署到 Vercel 后，用手机浏览器打开生产地址：
+
+- iPhone：Safari 分享按钮 -> 添加到主屏幕
+- Android：Chrome 菜单 -> 添加到主屏幕 / 安装应用
 
 ## Supabase
 
@@ -78,7 +91,7 @@ DEMO_USER_ID=
 
 ## API Routes
 
-- `POST /api/analyze-photo`：OpenAI Vision 识别照片并匹配标准库
+- `POST /api/analyze-photo`：豆包或 OpenAI 识别照片并匹配标准库
 - `POST /api/match-nutrition`：按食材名称和重量查询 USDA / Open Food Facts
 - `POST /api/barcode`：按条形码查询 Open Food Facts
 - `GET /api/entries`：读取今日记录
@@ -86,11 +99,3 @@ DEMO_USER_ID=
 - `GET /api/favorites`：读取常吃组合
 - `POST /api/favorites`：保存常吃组合
 - `POST /api/daily-report`：生成每日复盘
-
-## 下一步
-
-- 接 Supabase Auth，把 `DEMO_USER_ID` 替换为当前登录用户
-- 上传照片到 Supabase Storage，并把 `photo_url` 写入 `meal_entries`
-- 加入目标设置保存
-- 增加历史日历、趋势图和体重记录
-- 给 OpenAI 输出加更严格的 schema guard 和低置信度提醒

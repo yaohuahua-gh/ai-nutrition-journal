@@ -2,27 +2,30 @@ import OpenAI from 'openai'
 import { NextResponse } from 'next/server'
 import { mockEntries } from '@/lib/mock-data'
 import { summarizeDay } from '@/lib/nutrition'
-import type { MealEntry } from '@/types/nutrition'
+import type { DailyTargets, MealEntry } from '@/types/nutrition'
 
-function fallbackNarrative(entries: MealEntry[]) {
-  const summary = summarizeDay(entries)
+function fallbackNarrative(entries: MealEntry[], targets?: DailyTargets) {
+  const summary = summarizeDay(entries, targets)
   const proteinOk = summary.proteinG >= summary.target.proteinG
   const calorieOver = summary.caloriesKcal > summary.target.caloriesKcal
+
   return [
     `今天记录了 ${entries.length} 餐，总热量约 ${summary.caloriesKcal} kcal。`,
-    proteinOk ? '蛋白质已经达标，保留这类高蛋白组合。' : `蛋白质还差约 ${Math.round(summary.target.proteinG - summary.proteinG)} g，下一餐可以补充鸡蛋、鱼虾、豆制品或酸奶。`,
+    proteinOk
+      ? '蛋白质已经达标，保留这类高蛋白组合。'
+      : `蛋白质还差约 ${Math.round(summary.target.proteinG - summary.proteinG)} g，下一餐可以补充鸡蛋、鱼虾、豆制品或酸奶。`,
     calorieOver ? '热量略高，明天优先减少精制主食和高油烹饪。' : '热量仍在目标附近，节奏不错。',
     '明天建议：每餐先确定蛋白质，再配一拳主食和两拳蔬菜。'
   ].join('\n')
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as { entries?: MealEntry[] }
+  const body = (await request.json().catch(() => ({}))) as { entries?: MealEntry[]; targets?: DailyTargets }
   const entries = body.entries?.length ? body.entries : mockEntries
-  const summary = summarizeDay(entries)
+  const summary = summarizeDay(entries, body.targets)
 
   if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json({ summary, narrative: fallbackNarrative(entries), mode: 'mock' })
+    return NextResponse.json({ summary, narrative: fallbackNarrative(entries, body.targets), mode: 'mock' })
   }
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
@@ -34,5 +37,5 @@ export async function POST(request: Request) {
     ]
   })
 
-  return NextResponse.json({ summary, narrative: completion.choices[0]?.message.content || fallbackNarrative(entries), mode: 'live' })
+  return NextResponse.json({ summary, narrative: completion.choices[0]?.message.content || fallbackNarrative(entries, body.targets), mode: 'live' })
 }
