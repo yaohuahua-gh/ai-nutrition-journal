@@ -22,10 +22,34 @@ const responseSchema = z.object({
   ingredients: z.array(ingredientSchema).min(1)
 })
 
+function parseModelJson(raw: string) {
+  const direct = JSON.parse(raw)
+  return responseSchema.parse(direct)
+}
+
+function parseModelContent(raw: string) {
+  try {
+    return parseModelJson(raw)
+  } catch {
+    const match = raw.match(/\{[\s\S]*\}/)
+    if (!match) throw new Error('AI did not return valid JSON.')
+    return parseModelJson(match[0])
+  }
+}
+
 export async function POST(request: Request) {
-  const form = await request.formData()
+  let form
+  try {
+    form = await request.formData()
+  } catch {
+    return NextResponse.json({ ingredients: [], mode: 'error', error: 'Could not read uploaded image.' }, { status: 400 })
+  }
+
   const file = form.get('photo')
   if (!(file instanceof File)) return NextResponse.json({ ingredients: mockAnalyze(), mode: 'mock' })
+  if (file.size > 8 * 1024 * 1024) {
+    return NextResponse.json({ ingredients: [], mode: 'error', error: '图片太大，请先换一张较小的照片或截图。' }, { status: 413 })
+  }
 
   const provider = getVisionProvider()
   if (!provider) {
@@ -66,8 +90,22 @@ export async function POST(request: Request) {
     )
   }
 
-  const raw = completion.choices[0]?.message.content || '{"ingredients":[]}'
-  const parsed = responseSchema.parse(JSON.parse(raw))
+  let parsed
+  try {
+    const raw = completion.choices[0]?.message.content || '{"ingredients":[]}'
+    parsed = parseModelContent(raw)
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ingredients: [],
+        mode: 'error',
+        provider: provider.name,
+        error: error instanceof Error ? error.message : 'AI returned an invalid response.'
+      },
+      { status: 502 }
+    )
+  }
+
   const ingredients = await Promise.all(
     parsed.ingredients.map(async (item) => {
       const ai: IngredientEstimate = {

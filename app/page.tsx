@@ -141,15 +141,35 @@ export default function HomePage() {
     if (!selectedPhoto) return
     setBusy('analyze')
     setAnalyzeMode('idle')
-    const form = new FormData()
-    form.append('photo', selectedPhoto)
-    const response = await fetch('/api/analyze-photo', { method: 'POST', body: form })
-    const data = await response.json()
-    setIngredients(data.ingredients || [])
-    setAnalyzeMode(data.mode === 'live' ? 'live' : data.mode === 'mock' ? 'mock' : 'error')
-    setAnalyzeMessage(data.error || data.note || '')
-    setAnalyzeProvider(data.provider || '')
-    setBusy(null)
+    setAnalyzeMessage('')
+
+    try {
+      const controller = new AbortController()
+      const timer = window.setTimeout(() => controller.abort(), 60_000)
+      const form = new FormData()
+      form.append('photo', selectedPhoto)
+      const response = await fetch('/api/analyze-photo', { method: 'POST', body: form, signal: controller.signal })
+      window.clearTimeout(timer)
+
+      let data
+      try {
+        data = await response.json()
+      } catch {
+        data = { mode: 'error', error: `服务器返回异常，状态码 ${response.status}` }
+      }
+
+      setIngredients(data.ingredients || [])
+      setAnalyzeMode(response.ok && data.mode === 'live' ? 'live' : data.mode === 'mock' ? 'mock' : 'error')
+      setAnalyzeMessage(data.error || data.note || `识别失败，状态码 ${response.status}`)
+      setAnalyzeProvider(data.provider || '')
+    } catch (error) {
+      setIngredients([])
+      setAnalyzeMode('error')
+      setAnalyzeMessage(error instanceof Error && error.name === 'AbortError' ? '识别超时，请换一张更小、更清晰的图片再试。' : '网络请求失败，请检查网络或稍后重试。')
+      setAnalyzeProvider('')
+    } finally {
+      setBusy(null)
+    }
   }
 
   async function refreshEntries() {

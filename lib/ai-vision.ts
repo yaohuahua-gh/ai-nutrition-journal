@@ -16,7 +16,9 @@ function getZhipuProvider(): VisionProvider | null {
     name: 'zhipu',
     client: new OpenAI({
       apiKey: process.env.ZHIPU_API_KEY,
-      baseURL: process.env.ZHIPU_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4'
+      baseURL: process.env.ZHIPU_BASE_URL || 'https://open.bigmodel.cn/api/paas/v4',
+      timeout: 45_000,
+      maxRetries: 1
     }),
     model: process.env.ZHIPU_MODEL || 'glm-4v-flash'
   }

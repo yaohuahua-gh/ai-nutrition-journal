@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ai-nutrition-journal-v4'
+const CACHE_NAME = 'ai-nutrition-journal-v5'
 const APP_SHELL = ['/', '/manifest.webmanifest', '/icons/icon.svg', '/icons/maskable.svg', '/images/wellness-hero.png']
 
 self.addEventListener('install', (event) => {
