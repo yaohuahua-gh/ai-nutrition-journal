@@ -7,6 +7,9 @@ import { mockAnalyze, mockMatchNutrition } from '@/lib/mock-data'
 import { mergeWithStandard, roundNutrition } from '@/lib/nutrition'
 import type { IngredientEstimate } from '@/types/nutrition'
 
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
 const ingredientSchema = z.object({
   name: z.string(),
   weightG: z.number(),
@@ -47,7 +50,7 @@ export async function POST(request: Request) {
 
   const file = form.get('photo')
   if (!(file instanceof File)) return NextResponse.json({ ingredients: mockAnalyze(), mode: 'mock' })
-  if (file.size > 8 * 1024 * 1024) {
+  if (file.size > 4 * 1024 * 1024) {
     return NextResponse.json({ ingredients: [], mode: 'error', error: '图片太大，请先换一张较小的照片或截图。' }, { status: 413 })
   }
 
@@ -63,16 +66,15 @@ export async function POST(request: Request) {
   try {
     completion = await provider.client.chat.completions.create({
       model: provider.model,
-      response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
-          content: 'You estimate food photo nutrition. Return strict JSON with ingredients array. Values are per visible portion, in grams and kcal. Be conservative and include confidence 0-1.'
+          content: 'You estimate food photo nutrition. Return only JSON, no markdown. The JSON shape is {"ingredients":[{"name":"string","weightG":number,"caloriesKcal":number,"proteinG":number,"fatG":number,"carbsG":number,"fiberG":number,"confidence":number}]}. Values are per visible portion, in grams and kcal. Be conservative.'
         },
         {
           role: 'user',
           content: [
-            { type: 'text', text: 'Identify each visible ingredient or dish component. Return name, weightG, caloriesKcal, proteinG, fatG, carbsG, fiberG, confidence.' },
+            { type: 'text', text: '识别图片中可见的每一种食材或菜品组成，并估算营养。只返回 JSON，不要解释。' },
             { type: 'image_url', image_url: { url: dataUrl } }
           ]
         }

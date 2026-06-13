@@ -69,6 +69,27 @@ function grams(value: number) {
   return Math.round(value * 10) / 10
 }
 
+async function compressImage(file: File) {
+  if (!file.type.startsWith('image/')) return file
+
+  const bitmap = await createImageBitmap(file)
+  const maxSide = 1280
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
+  const width = Math.max(1, Math.round(bitmap.width * scale))
+  const height = Math.max(1, Math.round(bitmap.height * scale))
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const context = canvas.getContext('2d')
+  if (!context) return file
+  context.drawImage(bitmap, 0, 0, width, height)
+
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.78))
+  bitmap.close()
+  if (!blob) return file
+  return new File([blob], 'meal-photo.jpg', { type: 'image/jpeg' })
+}
+
 export default function HomePage() {
   const [tab, setTab] = useState<Tab>('capture')
   const [mealType, setMealType] = useState<MealType>('lunch')
@@ -147,7 +168,8 @@ export default function HomePage() {
       const controller = new AbortController()
       const timer = window.setTimeout(() => controller.abort(), 60_000)
       const form = new FormData()
-      form.append('photo', selectedPhoto)
+      const compressedPhoto = await compressImage(selectedPhoto)
+      form.append('photo', compressedPhoto)
       const response = await fetch('/api/analyze-photo', { method: 'POST', body: form, signal: controller.signal })
       window.clearTimeout(timer)
 

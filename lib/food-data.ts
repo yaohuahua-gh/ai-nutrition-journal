@@ -16,6 +16,20 @@ function nutrient(food: UsdaFood, names: string[], unitName?: string) {
   return item?.value || 0
 }
 
+async function fetchJsonWithTimeout<T>(url: string | URL, init: RequestInit = {}, timeoutMs = 8000): Promise<T | undefined> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal })
+    if (!response.ok) return undefined
+    return (await response.json()) as T
+  } catch {
+    return undefined
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export async function searchUsdaFood(query: string, weightG: number): Promise<NutritionMatch | undefined> {
   if (!process.env.USDA_API_KEY) return undefined
   const url = new URL('https://api.nal.usda.gov/fdc/v1/foods/search')
@@ -23,10 +37,8 @@ export async function searchUsdaFood(query: string, weightG: number): Promise<Nu
   url.searchParams.set('query', query)
   url.searchParams.set('pageSize', '1')
 
-  const response = await fetch(url, { next: { revalidate: 60 * 60 * 24 } })
-  if (!response.ok) return undefined
-
-  const data = (await response.json()) as { foods?: UsdaFood[] }
+  const data = await fetchJsonWithTimeout<{ foods?: UsdaFood[] }>(url, { next: { revalidate: 60 * 60 * 24 } })
+  if (!data) return undefined
   const food = data.foods?.[0]
   if (!food) return undefined
 
@@ -55,19 +67,17 @@ export async function searchOpenFoodFacts(query: string, weightG: number): Promi
   url.searchParams.set('json', '1')
   url.searchParams.set('page_size', '1')
 
-  const response = await fetch(url, {
-    headers: { 'User-Agent': 'AI Nutrition Journal prototype - contact local' },
-    next: { revalidate: 60 * 60 * 24 }
-  })
-  if (!response.ok) return undefined
-
-  const data = (await response.json()) as {
+  const data = await fetchJsonWithTimeout<{
     products?: {
       code?: string
       product_name?: string
       nutriments?: Record<string, number>
     }[]
-  }
+  }>(url, {
+    headers: { 'User-Agent': 'AI Nutrition Journal prototype - contact local' },
+    next: { revalidate: 60 * 60 * 24 }
+  })
+  if (!data) return undefined
   const product = data.products?.[0]
   if (!product?.nutriments) return undefined
 
@@ -89,15 +99,13 @@ export async function searchOpenFoodFacts(query: string, weightG: number): Promi
 }
 
 export async function getOpenFoodFactsBarcode(code: string, weightG = 100): Promise<NutritionMatch | undefined> {
-  const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`, {
+  const data = await fetchJsonWithTimeout<{
+    product?: { product_name?: string; nutriments?: Record<string, number> }
+  }>(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`, {
     headers: { 'User-Agent': 'AI Nutrition Journal prototype - contact local' },
     next: { revalidate: 60 * 60 * 24 }
   })
-  if (!response.ok) return undefined
-
-  const data = (await response.json()) as {
-    product?: { product_name?: string; nutriments?: Record<string, number> }
-  }
+  if (!data) return undefined
   const product = data.product
   if (!product?.nutriments) return undefined
 
